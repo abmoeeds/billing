@@ -47,7 +47,7 @@ def generate_mock_data():
         "Wheelie Bags", "Duffle Bags", "Stumps", "Bails", "Umpire Counters",
         "Training Nets", "Bowling Machines", "Boundary Markers", "Bat Oil", "Grip Cones"
     ]
-    brands = ["SS", "SG", "Kookaburra", "GM", "Gray-Nicolls", "Adidas", "DSC"]
+    brands = ["SS", "SG", "Kookaburra", "GM", "Gray-Nicolls", "Adidas", "DSC", "NK"]
     
     for i in range(300):
         cat = random.choice(categories)
@@ -70,10 +70,12 @@ if st.sidebar.button("Factory Reset & Load 300 Items"):
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("Go to", ["Dashboard", "Inventory Management", "Expenses"])
 
+
 if page == "Dashboard":
     st.header("📈 Profit Analytics")
     
     # Date Filtering
+    
     t = st.radio("Timeframe", ["Daily", "Weekly", "Monthly"], horizontal=True)
     today = datetime.now().date()
     start_date = today if t == "Daily" else (today - timedelta(days=7) if t == "Weekly" else today.replace(day=1))
@@ -92,69 +94,105 @@ if page == "Dashboard":
     m2.metric("Expenses", f"-${total_expenses:,.2f}")
     m3.metric("Net Profit", f"${net_profit:,.2f}")
     
-    st.subheader("Recent Sales")
-    st.dataframe(sales[['name', 'category', 'sell_price', 'profit', 'sale_date']], use_container_width=True)
+    
+    st.subheader("Recent Sales & Customer History")
+    # We select the 'vendor' column because that's where we saved the Customer Name
+    # We rename it to 'Details' for clarity on the screen
+    display_df = sales[['sale_date', 'name', 'brand', 'sku', 'vendor', 'sell_price', 'profit']].copy()
+    display_df.columns = ['Date', 'Item', 'Brand', 'SKU', 'Vendor/Customer', 'Sold Price', 'Profit']
+    
+    st.dataframe(display_df.sort_values(by="Date", ascending=False), use_container_width=True)
+
 
 elif page == "Inventory Management":
-    st.header("📦 Inventory & Sales")
+    st.header("🛒 Sales & Inventory")
 
-    # --- SECTION 1: MARK AS SOLD (QUICK ACTION) ---
-    with st.expander("💰 Quick Sell (Mark as Sold)", expanded=True):
-        search_sell = st.text_input("Enter SKU or Name to Sell")
-        if search_sell:
-            # Look for items that haven't been sold yet
-            query = f"SELECT id, name, sku, sell_price FROM inventory WHERE (name LIKE '%{search_sell}%' OR sku LIKE '%{search_sell}%') AND sale_date IS NULL LIMIT 5"
+    # Initialize a 'Cart' in the mobile session if it doesn't exist
+    if 'cart' not in st.session_state:
+        st.session_state.cart = []
+
+    # --- SECTION 1: CUSTOMER & SEARCH ---
+    with st.container():
+        st.subheader("Create New Sale")
+        cust_name = st.text_input("👤 Customer Name", placeholder="Enter customer name")
+        
+        search_item = st.text_input("🔍 Search Item to Add (Name or SKU)")
+        
+        if search_item:
+            # Search available stock
+            query = f"SELECT * FROM inventory WHERE (name LIKE '%{search_item}%' OR sku LIKE '%{search_item}%') AND sale_date IS NULL LIMIT 5"
             results = pd.read_sql(query, conn)
             
-            if not results.empty:
-                for index, row in results.iterrows():
-                    col1, col2 = st.columns([3, 1])
-                    col1.write(f"**{row['name']}** ({row['sku']}) - ${row['sell_price']}")
-                    if col2.button(f"Sell", key=f"sell_{row['id']}"):
-                        today_str = datetime.now().strftime('%Y-%m-%d')
-                        c.execute("UPDATE inventory SET sale_date = ? WHERE id = ?", (today_str, row['id']))
-                        conn.commit()
-                        st.success(f"Sold: {row['name']}!")
-                        st.rerun()
+            for index, row in results.iterrows():
+                col1, col2 = st.columns([3, 1])
+                col1.write(f"**{row['name']}** ({row['sku']}) - ${row['sell_price']}")
+                if col2.button("➕ Add", key=f"add_{row['id']}"):
+                    # Add item details to session cart
+                    st.session_state.cart.append({
+                        'id': row['id'],
+                        'name': row['name'],
+                        'sku': row['sku'],
+                        'price': row['sell_price'],
+                        'brand': row['brand'],
+                        'vendor': row['vendor']
+                    })
+                    st.toast(f"Added {row['name']} to cart!")
+
+    # --- SECTION 2: THE SHOPPING CART (Basket) ---
+    if st.session_state.cart:
+        st.divider()
+        st.subheader("🛍️ Current Basket")
+        for i, item in enumerate(st.session_state.cart):
+            c1, c2, c3 = st.columns([3, 1, 1])
+            c1.write(f"{item['name']} ({item['sku']})")
+            c2.write(f"${item['price']}")
+            if c3.button("❌", key=f"remove_{i}"):
+                st.session_state.cart.pop(i)
+                st.rerun()
+        
+        total_bill = sum(item['price'] for item in st.session_state.cart)
+        st.write(f"### Total: ${total_bill:,.2f}")
+
+        if st.button("✅ Confirm & Finalize Sale", use_container_width=True):
+            if not cust_name:
+                st.error("Please enter a Customer Name before finalizing.")
             else:
-                st.info("No available stock found for that search.")
-
-    # --- SECTION 2: ADD NEW STOCK ---
-    with st.expander("➕ Add New Stock Item", expanded=False):
-        with st.form("new_item_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                item_name = st.text_input("Item Name")
-                brand = st.text_input("Brand")
-                category = st.selectbox("Category", [
-                    "English Willow Bats", "Kashmir Willow Bats", "Leather Balls", "Tennis Balls", 
-                    "Bat Grips", "Helmets", "Batting Pads", "WK Pads", "Batting Gloves", "WK Gloves",
-                    "Thigh Guards", "Chest Guards", "Arm Guards", "Abdo Guards", "Inner Gloves",
-                    "Shoes (Spikes)", "Shoes (Turf)", "Jerseys", "Trousers", "Socks",
-                    "Wheelie Bags", "Duffle Bags", "Stumps", "Bails", "Umpire Counters",
-                    "Training Nets", "Bowling Machines", "Boundary Markers", "Bat Oil", "Grip Cones"
-                ])
-                sku = st.text_input("SKU / Barcode")
-            with col2:
-                cost = st.number_input("Cost Price", min_value=0.0)
-                sell = st.number_input("Selling Price", min_value=0.0)
-                ship = st.number_input("Shipping Cost", min_value=0.0)
-                vendor = st.text_input("Vendor")
-                p_date = st.date_input("Purchase Date", datetime.now())
-
-            if st.form_submit_button("Save Item"):
-                c.execute('''INSERT INTO inventory (name, brand, category, sku, cost, vendor, p_date, sell_price, shipping) 
-                             VALUES (?,?,?,?,?,?,?,?,?)''', (item_name, brand, category, sku, cost, vendor, p_date, sell, ship))
+                sale_date_today = datetime.now().strftime('%Y-%m-%d')
+                # Process every item in the cart
+                for item in st.session_state.cart:
+                    # Note: We are using the 'vendor' field to store customer name for sold items 
+                    # OR you can alter your DB to add a customer column.
+                    # For now, let's update sale_date and we can use a custom query for reports.
+                    c.execute('''UPDATE inventory 
+                                 SET sale_date = ?, vendor = vendor || ' | Customer: ' || ? 
+                                 WHERE id = ?''', 
+                              (sale_date_today, cust_name, item['id']))
+                
                 conn.commit()
-                st.success("Item Added!")
+                st.session_state.cart = [] # Clear cart
+                st.success(f"Sale completed for {cust_name}!")
                 st.rerun()
 
-    # --- SECTION 3: VIEW CURRENT STOCK ---
+    # --- SECTION 3: ADD NEW STOCK ---
     st.divider()
-    st.subheader("📋 Current Stock Level")
-    # Only show items that are NOT sold
-    df_stock = pd.read_sql("SELECT name, brand, sku, sell_price FROM inventory WHERE sale_date IS NULL ORDER BY id DESC", conn)
-    st.dataframe(df_stock, use_container_width=True)
+    with st.expander("➕ Add New Stock to Shop", expanded=False):
+        with st.form("manual_add"):
+            c1, c2 = st.columns(2)
+            with c1:
+                name = st.text_input("Item Name")
+                brd = st.text_input("Brand")
+                cat = st.selectbox("Category", ["Bats", "Balls", "Pads", "Gloves", "Helmets", "Shoes", "Bags", "Other"])
+                sku_code = st.text_input("SKU")
+            with c2:
+                cp = st.number_input("Cost Price")
+                sp = st.number_input("Sell Price")
+                sh = st.number_input("Shipping")
+                vn = st.text_input("Vendor Name")
+            if st.form_submit_button("Save to Inventory"):
+                c.execute("INSERT INTO inventory (name, brand, category, sku, cost, vendor, sell_price, shipping) VALUES (?,?,?,?,?,?,?,?)",
+                          (name, brd, cat, sku_code, cp, vn, sp, sh))
+                conn.commit()
+                st.success("Added!")
 
 elif page == "Expenses":
     st.header("💸 Add Expense")
