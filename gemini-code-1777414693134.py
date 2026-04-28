@@ -96,17 +96,36 @@ if page == "Dashboard":
     st.dataframe(sales[['name', 'category', 'sell_price', 'profit', 'sale_date']], use_container_width=True)
 
 elif page == "Inventory Management":
-    st.header("📦 Inventory Management")
-    
-    # --- FORM TO ADD NEW ITEM ---
+    st.header("📦 Inventory & Sales")
+
+    # --- SECTION 1: MARK AS SOLD (QUICK ACTION) ---
+    with st.expander("💰 Quick Sell (Mark as Sold)", expanded=True):
+        search_sell = st.text_input("Enter SKU or Name to Sell")
+        if search_sell:
+            # Look for items that haven't been sold yet
+            query = f"SELECT id, name, sku, sell_price FROM inventory WHERE (name LIKE '%{search_sell}%' OR sku LIKE '%{search_sell}%') AND sale_date IS NULL LIMIT 5"
+            results = pd.read_sql(query, conn)
+            
+            if not results.empty:
+                for index, row in results.iterrows():
+                    col1, col2 = st.columns([3, 1])
+                    col1.write(f"**{row['name']}** ({row['sku']}) - ${row['sell_price']}")
+                    if col2.button(f"Sell", key=f"sell_{row['id']}"):
+                        today_str = datetime.now().strftime('%Y-%m-%d')
+                        c.execute("UPDATE inventory SET sale_date = ? WHERE id = ?", (today_str, row['id']))
+                        conn.commit()
+                        st.success(f"Sold: {row['name']}!")
+                        st.rerun()
+            else:
+                st.info("No available stock found for that search.")
+
+    # --- SECTION 2: ADD NEW STOCK ---
     with st.expander("➕ Add New Stock Item", expanded=False):
         with st.form("new_item_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
-            
             with col1:
                 item_name = st.text_input("Item Name")
                 brand = st.text_input("Brand")
-                # The 30 categories we discussed
                 category = st.selectbox("Category", [
                     "English Willow Bats", "Kashmir Willow Bats", "Leather Balls", "Tennis Balls", 
                     "Bat Grips", "Helmets", "Batting Pads", "WK Pads", "Batting Gloves", "WK Gloves",
@@ -116,36 +135,26 @@ elif page == "Inventory Management":
                     "Training Nets", "Bowling Machines", "Boundary Markers", "Bat Oil", "Grip Cones"
                 ])
                 sku = st.text_input("SKU / Barcode")
-            
             with col2:
-                cost = st.number_input("Cost Price", min_value=0.0, step=0.1)
-                sell = st.number_input("Selling Price", min_value=0.0, step=0.1)
-                ship = st.number_input("Shipping Cost", min_value=0.0, step=0.1)
-                vendor = st.text_input("Vendor/Supplier")
+                cost = st.number_input("Cost Price", min_value=0.0)
+                sell = st.number_input("Selling Price", min_value=0.0)
+                ship = st.number_input("Shipping Cost", min_value=0.0)
+                vendor = st.text_input("Vendor")
                 p_date = st.date_input("Purchase Date", datetime.now())
 
-            if st.form_submit_button("Save Item to Inventory"):
-                if item_name and sku:
-                    try:
-                        c.execute('''INSERT INTO inventory 
-                                     (name, brand, category, sku, cost, vendor, p_date, sell_price, shipping) 
-                                     VALUES (?,?,?,?,?,?,?,?,?)''', 
-                                  (item_name, brand, category, sku, cost, vendor, p_date, sell, ship))
-                        conn.commit()
-                        st.success(f"Added {item_name} successfully!")
-                    except sqlite3.IntegrityError:
-                        st.error("Error: This SKU already exists!")
-                else:
-                    st.warning("Please enter at least a Name and SKU.")
+            if st.form_submit_button("Save Item"):
+                c.execute('''INSERT INTO inventory (name, brand, category, sku, cost, vendor, p_date, sell_price, shipping) 
+                             VALUES (?,?,?,?,?,?,?,?,?)''', (item_name, brand, category, sku, cost, vendor, p_date, sell, ship))
+                conn.commit()
+                st.success("Item Added!")
+                st.rerun()
 
-    # --- SEARCH & VIEW SECTION ---
+    # --- SECTION 3: VIEW CURRENT STOCK ---
     st.divider()
-    search = st.text_input("🔍 Search Stock (Name or SKU)")
-    query = f"SELECT * FROM inventory WHERE name LIKE '%{search}%' OR sku LIKE '%{search}%' ORDER BY id DESC"
-    df = pd.read_sql(query, conn)
-    
-    # Formatting for mobile display
-    st.dataframe(df[['name', 'brand', 'category', 'sku', 'sell_price']], use_container_width=True)
+    st.subheader("📋 Current Stock Level")
+    # Only show items that are NOT sold
+    df_stock = pd.read_sql("SELECT name, brand, sku, sell_price FROM inventory WHERE sale_date IS NULL ORDER BY id DESC", conn)
+    st.dataframe(df_stock, use_container_width=True)
 
 elif page == "Expenses":
     st.header("💸 Add Expense")
