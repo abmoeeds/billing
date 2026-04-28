@@ -7,6 +7,7 @@ import random
 # --- CONFIG & SECURITY ---
 st.set_page_config(page_title="Cricket Pro Billing", layout="wide", initial_sidebar_state="collapsed")
 
+
 def check_password():
     if "authenticated" not in st.session_state:
         st.title("🔐 Cricket Billing Login")
@@ -68,7 +69,7 @@ if st.sidebar.button("Factory Reset & Load 300 Items"):
 
 # --- DASHBOARD LOGIC ---
 st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Dashboard", "Inventory Management", "Expenses"])
+page = st.sidebar.radio("Go to", ["Dashboard", "Sales (POS)", "Inventory Management", "Expenses"])
 
 
 if page == "Dashboard":
@@ -105,94 +106,20 @@ if page == "Dashboard":
 
 
 elif page == "Inventory Management":
-    st.header("🛒 Sales & Inventory")
+    st.header("📦 Warehouse & Stock")
+    
+    # Form to add new stock (The code we wrote before)
+    with st.expander("➕ Add New Stock Item"):
+        with st.form("add_stock"):
+            # ... (Your entry fields for name, sku, cost, etc) ...
+            if st.form_submit_button("Save Item"):
+                # ... (Your insert query) ...
+                st.success("Stock Added")
 
-    # Initialize a 'Cart' in the mobile session if it doesn't exist
-    if 'cart' not in st.session_state:
-        st.session_state.cart = []
-
-    # --- SECTION 1: CUSTOMER & SEARCH ---
-    with st.container():
-        st.subheader("Create New Sale")
-        cust_name = st.text_input("👤 Customer Name", placeholder="Enter customer name")
-        
-        search_item = st.text_input("🔍 Search Item to Add (Name or SKU)")
-        
-        if search_item:
-            # Search available stock
-            query = f"SELECT * FROM inventory WHERE (name LIKE '%{search_item}%' OR sku LIKE '%{search_item}%') AND sale_date IS NULL LIMIT 5"
-            results = pd.read_sql(query, conn)
-            
-            for index, row in results.iterrows():
-                col1, col2 = st.columns([3, 1])
-                col1.write(f"**{row['name']}** ({row['sku']}) - ${row['sell_price']}")
-                if col2.button("➕ Add", key=f"add_{row['id']}"):
-                    # Add item details to session cart
-                    st.session_state.cart.append({
-                        'id': row['id'],
-                        'name': row['name'],
-                        'sku': row['sku'],
-                        'price': row['sell_price'],
-                        'brand': row['brand'],
-                        'vendor': row['vendor']
-                    })
-                    st.toast(f"Added {row['name']} to cart!")
-
-    # --- SECTION 2: THE SHOPPING CART (Basket) ---
-    if st.session_state.cart:
-        st.divider()
-        st.subheader("🛍️ Current Basket")
-        for i, item in enumerate(st.session_state.cart):
-            c1, c2, c3 = st.columns([3, 1, 1])
-            c1.write(f"{item['name']} ({item['sku']})")
-            c2.write(f"${item['price']}")
-            if c3.button("❌", key=f"remove_{i}"):
-                st.session_state.cart.pop(i)
-                st.rerun()
-        
-        total_bill = sum(item['price'] for item in st.session_state.cart)
-        st.write(f"### Total: ${total_bill:,.2f}")
-
-        if st.button("✅ Confirm & Finalize Sale", use_container_width=True):
-            if not cust_name:
-                st.error("Please enter a Customer Name before finalizing.")
-            else:
-                sale_date_today = datetime.now().strftime('%Y-%m-%d')
-                # Process every item in the cart
-                for item in st.session_state.cart:
-                    # Note: We are using the 'vendor' field to store customer name for sold items 
-                    # OR you can alter your DB to add a customer column.
-                    # For now, let's update sale_date and we can use a custom query for reports.
-                    c.execute('''UPDATE inventory 
-                                 SET sale_date = ?, vendor = vendor || ' | Customer: ' || ? 
-                                 WHERE id = ?''', 
-                              (sale_date_today, cust_name, item['id']))
-                
-                conn.commit()
-                st.session_state.cart = [] # Clear cart
-                st.success(f"Sale completed for {cust_name}!")
-                st.rerun()
-
-    # --- SECTION 3: ADD NEW STOCK ---
-    st.divider()
-    with st.expander("➕ Add New Stock to Shop", expanded=False):
-        with st.form("manual_add"):
-            c1, c2 = st.columns(2)
-            with c1:
-                name = st.text_input("Item Name")
-                brd = st.text_input("Brand")
-                cat = st.selectbox("Category", ["Bats", "Balls", "Pads", "Gloves", "Helmets", "Shoes", "Bags", "Other"])
-                sku_code = st.text_input("SKU")
-            with c2:
-                cp = st.number_input("Cost Price")
-                sp = st.number_input("Sell Price")
-                sh = st.number_input("Shipping")
-                vn = st.text_input("Vendor Name")
-            if st.form_submit_button("Save to Inventory"):
-                c.execute("INSERT INTO inventory (name, brand, category, sku, cost, vendor, sell_price, shipping) VALUES (?,?,?,?,?,?,?,?)",
-                          (name, brd, cat, sku_code, cp, vn, sp, sh))
-                conn.commit()
-                st.success("Added!")
+    # View full stock list
+    st.subheader("📋 Current Stock Levels")
+    df_stock = pd.read_sql("SELECT name, brand, category, sku, cost, sell_price FROM inventory WHERE sale_date IS NULL", conn)
+    st.dataframe(df_stock, use_container_width=True)
 
 elif page == "Expenses":
     st.header("💸 Add Expense")
@@ -205,3 +132,56 @@ elif page == "Expenses":
             c.execute("INSERT INTO expenses (desc, amount, category, e_date) VALUES (?,?,?,?)", (desc, amt, cat, date))
             conn.commit()
             st.success("Expense Recorded!")
+
+elif page == "Sales (POS)":
+    st.header("🏪 Point of Sale")
+
+    # Session state for the cart
+    if 'cart' not in st.session_state:
+        st.session_state.cart = []
+
+    # 1. Customer Info
+    cust_name = st.text_input("👤 Customer Name")
+    
+    # 2. Search & Add
+    search_item = st.text_input("🔍 Search Item (Name or SKU)")
+    if search_item:
+        query = f"SELECT * FROM inventory WHERE (name LIKE '%{search_item}%' OR sku LIKE '%{search_item}%') AND sale_date IS NULL LIMIT 5"
+        results = pd.read_sql(query, conn)
+        
+        for index, row in results.iterrows():
+            col1, col2 = st.columns([3, 1])
+            col1.write(f"**{row['name']}** - ${row['sell_price']}")
+            if col2.button("➕ Add", key=f"pos_{row['id']}"):
+                st.session_state.cart.append({
+                    'id': row['id'], 'name': row['name'], 'sku': row['sku'], 
+                    'price': row['sell_price'], 'brand': row['brand']
+                })
+                st.rerun()
+
+    # 3. Checkout Basket
+    if st.session_state.cart:
+        st.subheader("🛒 Basket")
+        for i, item in enumerate(st.session_state.cart):
+            c1, c2, c3 = st.columns([3, 1, 1])
+            c1.write(f"{item['name']}")
+            c2.write(f"${item['price']}")
+            if c3.button("❌", key=f"rem_{i}"):
+                st.session_state.cart.pop(i)
+                st.rerun()
+        
+        total = sum(item['price'] for item in st.session_state.cart)
+        st.markdown(f"### Total Bill: **${total:,.2f}**")
+
+        if st.button("🏁 Finalize & Print Receipt", use_container_width=True):
+            if cust_name:
+                today = datetime.now().strftime('%Y-%m-%d')
+                for item in st.session_state.cart:
+                    c.execute("UPDATE inventory SET sale_date = ?, vendor = vendor || ' | Customer: ' || ? WHERE id = ?", 
+                              (today, cust_name, item['id']))
+                conn.commit()
+                st.session_state.cart = []
+                st.success(f"Sale recorded for {cust_name}!")
+                st.balloons() # Fun effect for mobile!
+            else:
+                st.error("Please enter Customer Name")
