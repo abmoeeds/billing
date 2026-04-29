@@ -192,52 +192,77 @@ elif page == "Expenses":
 elif page == "Sales (POS)":
     st.header("🏪 Point of Sale")
 
-    # Session state for the cart
     if 'cart' not in st.session_state:
         st.session_state.cart = []
 
-    # 1. Customer Info
-    cust_name = st.text_input("👤 Customer Name")
+    # --- 1. CUSTOMER & PAYMENT INFO ---
+    with st.container():
+        c1, c2 = st.columns(2)
+        with c1:
+            cust_name = st.text_input("👤 Customer Name")
+        with c2:
+            pay_method = st.selectbox("💳 Payment Method", ["Cash", "Card", "Bank Transfer", "UPI/QR"])
     
-    # 2. Search & Add
+    # --- 2. SEARCH & ADD TO BASKET ---
     search_item = st.text_input("🔍 Search Item (Name or SKU)")
     if search_item:
+        # We find available items
         query = f"SELECT * FROM inventory WHERE (name LIKE '%{search_item}%' OR sku LIKE '%{search_item}%') AND sale_date IS NULL LIMIT 5"
         results = pd.read_sql(query, conn)
         
         for index, row in results.iterrows():
-            col1, col2 = st.columns([3, 1])
-            col1.write(f"**{row['name']}** - ${row['sell_price']}")
-            if col2.button("➕ Add", key=f"pos_{row['id']}"):
-                st.session_state.cart.append({
-                    'id': row['id'], 'name': row['name'], 'sku': row['sku'], 
-                    'price': row['sell_price'], 'brand': row['brand']
-                })
-                st.rerun()
+            with st.expander(f"➕ Add {row['name']} ({row['sku']})"):
+                col_q, col_d, col_b = st.columns([1, 1, 1])
+                qty = col_q.number_input("Qty", min_value=1, value=1, key=f"q_{row['id']}")
+                disc = col_d.number_input("Discount ($)", min_value=0.0, value=0.0, key=f"d_{row['id']}")
+                
+                if col_b.button("Add to Basket", key=f"btn_{row['id']}"):
+                    # Logic: We find 'qty' number of items with the same name/sku that are unsold
+                    find_others = pd.read_sql(f"SELECT id FROM inventory WHERE name = '{row['name']}' AND sale_date IS NULL LIMIT {qty}", conn)
+                    
+                    if len(find_others) < qty:
+                        st.error(f"Only {len(find_others)} in stock!")
+                    else:
+                        st.session_state.cart.append({
+                            'ids': find_others['id'].tolist(),
+                            'name': row['name'],
+                            'price': row['sell_price'],
+                            'qty': qty,
+                            'discount': disc,
+                            'total': (row['sell_price'] * qty) - disc
+                        })
+                        st.toast("Added to basket!")
+                        st.rerun()
 
-    # 3. Checkout Basket
+    # --- 3. THE BASKET (RECEIPT PREVIEW) ---
     if st.session_state.cart:
-        st.subheader("🛒 Basket")
+        st.divider()
+        st.subheader("🛒 Basket Summary")
+        
         for i, item in enumerate(st.session_state.cart):
-            c1, c2, c3 = st.columns([3, 1, 1])
-            c1.write(f"{item['name']}")
-            c2.write(f"${item['price']}")
-            if c3.button("❌", key=f"rem_{i}"):
+            col_a, col_b, col_c = st.columns([3, 1, 1])
+            col_a.write(f"**{item['name']}** \n{item['qty']} x ${item['price']} (Disc: -${item['discount']})")
+            col_b.write(f"**${item['total']:,.2f}**")
+            if col_c.button("❌", key=f"del_{i}"):
                 st.session_state.cart.pop(i)
                 st.rerun()
         
-        total = sum(item['price'] for item in st.session_state.cart)
-        st.markdown(f"### Total Bill: **${total:,.2f}**")
+        grand_total = sum(item['total'] for item in st.session_state.cart)
+        st.markdown(f"## Total to Pay: **${grand_total:,.2f}**")
+        st.info(f"Payment via: {pay_method}")
 
-        if st.button("🏁 Finalize & Print Receipt", use_container_width=True):
+        if st.button("🏁 Finalize Sale & Deduct Stock", use_container_width=True):
             if cust_name:
-                today = datetime.now().strftime('%Y-%m-%d')
+                sale_date_today = datetime.now().strftime('%Y-%m-%d')
                 for item in st.session_state.cart:
-                    c.execute("UPDATE inventory SET sale_date = ?, vendor = vendor || ' | Customer: ' || ? WHERE id = ?", 
-                              (today, cust_name, item['id']))
+                    for item_id in item['ids']:
+                        # We store Customer + Payment + Discount info in the vendor field for tracking
+                        note = f"Cust: {cust_name} | Pay: {pay_method} | Disc: {item['discount']/item['qty']}"
+                        c.execute("UPDATE inventory SET sale_date = ?, vendor = ? WHERE id = ?", 
+                                  (sale_date_today, note, item_id))
                 conn.commit()
                 st.session_state.cart = []
-                st.success(f"Sale recorded for {cust_name}!")
-                st.balloons() # Fun effect for mobile!
+                st.success("Sale Completed Successfully!")
+                st.balloons()
             else:
-                st.error("Please enter Customer Name")
+                st.error("Please enter a Customer Name")
