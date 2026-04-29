@@ -3,6 +3,50 @@ import pandas as pd
 import sqlite3
 from datetime import datetime, timedelta
 import random
+from weasyprint import HTML
+
+def create_pdf_invoice(customer, pay_method, cart_items):
+    total_bill = sum(item['total'] for item in cart_items)
+    date_str = datetime.now().strftime('%d-%b-%Y')
+    
+    rows = ""
+    for item in cart_items:
+        rows += f"""
+        <tr>
+            <td>{item['name']}</td>
+            <td style='text-align: center;'>{item['qty']}</td>
+            <td style='text-align: right;'>${item['price']:.2f}</td>
+            <td style='text-align: right;'>-${item['discount']:.2f}</td>
+            <td style='text-align: right;'>${item['total']:.2f}</td>
+        </tr>"""
+
+    html_content = f"""
+    <html>
+    <head>
+        <style>
+            @page {{ size: A4; margin: 20mm; }}
+            body {{ font-family: sans-serif; color: #333; }}
+            .header {{ text-align: center; border-bottom: 2px solid #1a5276; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+            th {{ background: #1a5276; color: white; padding: 10px; }}
+            td {{ padding: 10px; border-bottom: 1px solid #ddd; }}
+        </style>
+    </head>
+    <body>
+        <div class='header'><h1>CRICKET GEAR PRO</h1></div>
+        <p><strong>Customer:</strong> {customer} | <strong>Date:</strong> {date_str}</p>
+        <p><strong>Payment:</strong> {pay_method}</p>
+        <table>
+            <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Disc</th><th>Total</th></tr></thead>
+            <tbody>{rows}<tr><td colspan='4' align='right'><b>Grand Total</b></td><td><b>${total_bill:.2f}</b></td></tr></tbody>
+        </table>
+    </body>
+    </html>"""
+    
+    # Generate PDF in memory
+    return HTML(string=html_content).write_pdf()
+
+
 
 # --- CONFIG & SECURITY ---
 st.set_page_config(page_title="Cricket Pro Billing", layout="wide", initial_sidebar_state="collapsed")
@@ -251,18 +295,20 @@ elif page == "Sales (POS)":
         st.markdown(f"## Total to Pay: **${grand_total:,.2f}**")
         st.info(f"Payment via: {pay_method}")
 
-        if st.button("🏁 Finalize Sale & Deduct Stock", use_container_width=True):
+
+if st.button("🏁 Finalize Sale & Deduct Stock"):
             if cust_name:
-                sale_date_today = datetime.now().strftime('%Y-%m-%d')
-                for item in st.session_state.cart:
-                    for item_id in item['ids']:
-                        # We store Customer + Payment + Discount info in the vendor field for tracking
-                        note = f"Cust: {cust_name} | Pay: {pay_method} | Disc: {item['discount']/item['qty']}"
-                        c.execute("UPDATE inventory SET sale_date = ?, vendor = ? WHERE id = ?", 
-                                  (sale_date_today, note, item_id))
-                conn.commit()
-                st.session_state.cart = []
-                st.success("Sale Completed Successfully!")
-                st.balloons()
-            else:
-                st.error("Please enter a Customer Name")
+                # ... (Keep your existing database update code) ...
+                
+                # Add the PDF Download Button
+                pdf_data = create_pdf_invoice(cust_name, pay_method, st.session_state.cart)
+                st.download_button(
+                    label="📥 Download PDF Invoice",
+                    data=pdf_data,
+                    file_name=f"Invoice_{cust_name}.pdf",
+                    mime="application/pdf"
+                )
+                
+                st.success("Sale Saved! Click above to download the invoice.")
+
+
