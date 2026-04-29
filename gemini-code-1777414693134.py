@@ -76,6 +76,8 @@ if page == "Dashboard":
     st.header("📈 Profit Analytics")
     
     # Date Filtering
+    sales_query = "SELECT * FROM inventory WHERE sale_date IS NOT NULL"
+    sales = pd.read_sql(sales_query, conn)
     
     t = st.radio("Timeframe", ["Daily", "Weekly", "Monthly"], horizontal=True)
     today = datetime.now().date()
@@ -103,7 +105,7 @@ if page == "Dashboard":
     display_df.columns = ['Date', 'Item', 'Brand', 'SKU', 'Vendor/Customer', 'Sold Price', 'Profit']
     
     st.dataframe(display_df.sort_values(by="Date", ascending=False), use_container_width=True)
-
+   
 
 elif page == "Inventory Management":
     st.header("📦 Warehouse & Stock Management")
@@ -153,17 +155,30 @@ elif page == "Inventory Management":
                 else:
                     st.warning("Item Name and SKU are required fields.")
 
-    # --- STOCK VISUALIZATION ---
+# --- STOCK VISUALIZATION ---
     st.divider()
-    st.subheader("📋 Current Warehouse Stock")
+    st.subheader("📋 Stock Levels (Available)")
     
-    # Table showing only items that haven't been sold yet
-    view_query = "SELECT name, brand, category, sku, cost, sell_price, vendor FROM inventory WHERE sale_date IS NULL ORDER BY id DESC"
-    df_view = pd.read_sql(view_query, conn)
+    # This query groups identical items by Name and Brand to show you the count
+    summary_query = """
+        SELECT name, brand, category, sell_price, COUNT(*) as qty_left 
+        FROM inventory 
+        WHERE sale_date IS NULL 
+        GROUP BY name, brand, category, sell_price
+    """
+    df_summary = pd.read_sql(summary_query, conn)
     
-    # Display total items count
-    st.info(f"Total unique items currently in stock: {len(df_view)}")
-    st.dataframe(df_view, use_container_width=True)
+    if not df_summary.empty:
+        # Highlight low stock (optional)
+        st.dataframe(df_summary, use_container_width=True)
+        st.info(f"💡 You have {df_summary['qty_left'].sum()} total items across {len(df_summary)} different products.")
+    else:
+        st.warning("⚠️ Warehouse is empty! Add new stock above.")
+
+    # --- DETAILED SKU LIST ---
+    with st.expander("View Individual SKUs (Serial Numbers)"):
+        df_all = pd.read_sql("SELECT name, sku, vendor, p_date FROM inventory WHERE sale_date IS NULL", conn)
+        st.dataframe(df_all, use_container_width=True)
 
 elif page == "Expenses":
     st.header("💸 Add Expense")
