@@ -106,20 +106,64 @@ if page == "Dashboard":
 
 
 elif page == "Inventory Management":
-    st.header("📦 Warehouse & Stock")
+    st.header("📦 Warehouse & Stock Management")
     
-    # Form to add new stock (The code we wrote before)
-    with st.expander("➕ Add New Stock Item"):
-        with st.form("add_stock"):
-            # ... (Your entry fields for name, sku, cost, etc) ...
-            if st.form_submit_button("Save Item"):
-                # ... (Your insert query) ...
-                st.success("Stock Added")
+    # --- FULL DATA ENTRY FORM ---
+    with st.expander("➕ Add New Stock (Manual Entry)", expanded=True):
+        with st.form("comprehensive_add_form", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                new_name = st.text_input("Item Name (e.g. Master-5000 Bat)")
+                new_brand = st.text_input("Brand (e.g. SS, SG, Kookaburra)")
+                new_cat = st.selectbox("Category", [
+                    "English Willow Bats", "Kashmir Willow Bats", "Leather Balls", "Tennis Balls", 
+                    "Batting Pads", "WK Pads", "Batting Gloves", "WK Gloves", "Helmets", 
+                    "Shoes (Spikes)", "Shoes (Turf)", "Kit Bags", "Stumps", "Other"
+                ])
+                new_sku = st.text_input("SKU / Barcode Base")
+                new_vendor = st.text_input("Vendor / Supplier Name")
+            
+            with col2:
+                new_cost = st.number_input("Cost Price (Per Item)", min_value=0.0, format="%.2f")
+                new_sell = st.number_input("Selling Price (Per Item)", min_value=0.0, format="%.2f")
+                new_ship = st.number_input("Shipping Cost (Per Item)", min_value=0.0, format="%.2f")
+                new_qty = st.number_input("Quantity to Add", min_value=1, max_value=100, value=1)
+                new_date = st.date_input("Purchase Date", datetime.now())
 
-    # View full stock list
-    st.subheader("📋 Current Stock Levels")
-    df_stock = pd.read_sql("SELECT name, brand, category, sku, cost, sell_price FROM inventory WHERE sale_date IS NULL", conn)
-    st.dataframe(df_stock, use_container_width=True)
+            submit_btn = st.form_submit_button("📥 Save to Inventory")
+
+            if submit_btn:
+                if new_name and new_sku:
+                    try:
+                        # Loop to handle Quantity
+                        for i in range(new_qty):
+                            # If quantity > 1, we append a number to the SKU to keep them unique
+                            final_sku = f"{new_sku}-{i+1}" if new_qty > 1 else new_sku
+                            
+                            c.execute('''INSERT INTO inventory 
+                                         (name, brand, category, sku, cost, vendor, p_date, sell_price, shipping) 
+                                         VALUES (?,?,?,?,?,?,?,?,?)''', 
+                                      (new_name, new_brand, new_cat, final_sku, new_cost, new_vendor, new_date, new_sell, new_ship))
+                        
+                        conn.commit()
+                        st.success(f"Successfully added {new_qty} items of '{new_name}' to stock!")
+                    except sqlite3.IntegrityError:
+                        st.error("Error: This SKU already exists in the database. Please use a unique SKU.")
+                else:
+                    st.warning("Item Name and SKU are required fields.")
+
+    # --- STOCK VISUALIZATION ---
+    st.divider()
+    st.subheader("📋 Current Warehouse Stock")
+    
+    # Table showing only items that haven't been sold yet
+    view_query = "SELECT name, brand, category, sku, cost, sell_price, vendor FROM inventory WHERE sale_date IS NULL ORDER BY id DESC"
+    df_view = pd.read_sql(view_query, conn)
+    
+    # Display total items count
+    st.info(f"Total unique items currently in stock: {len(df_view)}")
+    st.dataframe(df_view, use_container_width=True)
 
 elif page == "Expenses":
     st.header("💸 Add Expense")
