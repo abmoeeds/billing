@@ -3,7 +3,7 @@ import pandas as pd
 import sqlite3
 from datetime import datetime, timedelta
 import random
-from weasyprint import HTML
+#from weasyprint import HTML
 from fpdf import FPDF
 from io import BytesIO
 
