@@ -4,47 +4,68 @@ import sqlite3
 from datetime import datetime, timedelta
 import random
 from weasyprint import HTML
+from fpdf import FPDF
+from io import BytesIO
 
 def create_pdf_invoice(customer, pay_method, cart_items):
-    total_bill = sum(item['total'] for item in cart_items)
-    date_str = datetime.now().strftime('%d-%b-%Y')
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 20)
     
-    rows = ""
+    # Header
+    pdf.set_text_color(0, 77, 64) # British Green
+    pdf.cell(0, 10, "CRICKET GEAR PRO UK", ln=True, align='C')
+    pdf.set_font("Arial", size=10)
+    pdf.cell(0, 10, "Official Sales Invoice - Slough, Berkshire", ln=True, align='C')
+    pdf.ln(10)
+    
+    # Customer Info
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, f"Customer: {customer}", ln=True)
+    pdf.set_font("Arial", size=10)
+    pdf.cell(0, 7, f"Date: {datetime.now().strftime('%d-%b-%Y')}", ln=True)
+    pdf.cell(0, 7, f"Payment Method: {pay_method}", ln=True)
+    pdf.ln(5)
+    
+    # Table Header
+    pdf.set_fill_color(0, 77, 64)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(80, 10, " Item Description", border=1, fill=True)
+    pdf.cell(25, 10, " Qty", border=1, fill=True, align='C')
+    pdf.cell(30, 10, " Price", border=1, fill=True, align='C')
+    pdf.cell(25, 10, " Disc", border=1, fill=True, align='C')
+    pdf.cell(30, 10, " Total", border=1, fill=True, align='C')
+    pdf.ln()
+    
+    # Table Body
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", size=10)
+    total_bill = 0
     for item in cart_items:
-        rows += f"""
-        <tr>
-            <td>{item['name']}</td>
-            <td style='text-align: center;'>{item['qty']}</td>
-            <td style='text-align: right;'>${item['price']:.2f}</td>
-            <td style='text-align: right;'>-${item['discount']:.2f}</td>
-            <td style='text-align: right;'>${item['total']:.2f}</td>
-        </tr>"""
-
-    html_content = f"""
-    <html>
-    <head>
-        <style>
-            @page {{ size: A4; margin: 20mm; }}
-            body {{ font-family: sans-serif; color: #333; }}
-            .header {{ text-align: center; border-bottom: 2px solid #1a5276; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-            th {{ background: #1a5276; color: white; padding: 10px; }}
-            td {{ padding: 10px; border-bottom: 1px solid #ddd; }}
-        </style>
-    </head>
-    <body>
-        <div class='header'><h1>CRICKET GEAR PRO</h1></div>
-        <p><strong>Customer:</strong> {customer} | <strong>Date:</strong> {date_str}</p>
-        <p><strong>Payment:</strong> {pay_method}</p>
-        <table>
-            <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Disc</th><th>Total</th></tr></thead>
-            <tbody>{rows}<tr><td colspan='4' align='right'><b>Grand Total</b></td><td><b>${total_bill:.2f}</b></td></tr></tbody>
-        </table>
-    </body>
-    </html>"""
+        pdf.cell(80, 10, f" {item['name']}", border=1)
+        pdf.cell(25, 10, f" {item['qty']}", border=1, align='C')
+        pdf.cell(30, 10, f" £{item['price']:.2f}", border=1, align='C')
+        pdf.cell(25, 10, f" -£{item['discount']:.2f}", border=1, align='C')
+        pdf.cell(30, 10, f" £{item['total']:.2f}", border=1, align='C')
+        pdf.ln()
+        total_bill += item['total']
+        
+    # Grand Total
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(160, 10, "Grand Total ", border=0, align='R')
+    pdf.cell(30, 10, f"£{total_bill:.2f}", border=1, align='C')
     
-    # Generate PDF in memory
-    return HTML(string=html_content).write_pdf()
+    # Footer
+    pdf.ln(20)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 5, "Thank you for your custom!", ln=True, align='C')
+    pdf.cell(0, 5, "All goods remain property of Cricket Gear Pro until paid in full.", ln=True, align='C')
+
+    # Return as bytes
+    return pdf.output()
 
 
 
