@@ -316,20 +316,14 @@ elif page == "Sales (POS)":
         st.markdown(f"## Total to Pay: **${grand_total:,.2f}**")
         st.info(f"Payment via: {pay_method}")
 
-
 if st.button("🏁 Finalize Sale & Deduct Stock"):
-            if cust_name:
-                # ... (Keep your existing database update code) ...
-                
-                # Add the PDF Download Button
-                pdf_data = create_pdf_invoice(cust_name, pay_method, st.session_state.cart)
-                st.download_button(
-                    label="📥 Download PDF Invoice",
-                    data=pdf_data,
-                    file_name=f"Invoice_{cust_name}.pdf",
-                    mime="application/pdf"
-                )
-                
-                st.success("Sale Saved! Click above to download the invoice.")
-
-
+    if cust_name:
+        # ... your database code ...
+        
+        pdf_bytes = create_pdf_invoice(cust_name, pay_method, st.session_state.cart)
+        st.download_button(
+            label="📥 Download £ Invoice (PDF)",
+            data=bytes(pdf_bytes), # FPDF2 outputs bytes
+            file_name=f"Invoice_{cust_name}.pdf",
+            mime="application/pdf"
+        )
