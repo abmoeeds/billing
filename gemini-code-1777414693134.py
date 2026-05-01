@@ -1,15 +1,25 @@
 import streamlit as st
-import pandas as pd
 import sqlite3
-from datetime import datetime, timedelta
-import random
-#from weasyprint import HTML
+import pandas as pd
+from datetime import datetime
 from fpdf import FPDF
-from io import BytesIO
+
+# Connect to database
+conn = sqlite3.connect('cricket_data.db', check_same_thread=False)
+c = conn.cursor()
+
+# ALL OF THESE MUST BE FLUSH TO THE LEFT MARGIN
+c.execute('''CREATE TABLE IF NOT EXISTS inventory 
+             (id INTEGER PRIMARY KEY, name TEXT, brand TEXT, category TEXT, sku TEXT, 
+              cost REAL, vendor TEXT, p_date DATE, sell_price REAL, shipping REAL, 
+              sale_date DATE, profit REAL)''')
 
 c.execute('''CREATE TABLE IF NOT EXISTS services 
              (id INTEGER PRIMARY KEY, service_name TEXT, price REAL, 
               customer_name TEXT, sale_date DATE, pay_method TEXT)''')
+
+c.execute('''CREATE TABLE IF NOT EXISTS expenses 
+             (id INTEGER PRIMARY KEY, category TEXT, amount REAL, notes TEXT, date DATE)''')
 conn.commit()
 
 def create_pdf_invoice(customer, pay_method, cart_items):
