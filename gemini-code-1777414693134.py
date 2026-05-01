@@ -153,41 +153,25 @@ page = st.sidebar.radio("Go to", ["Dashboard", "Sales (POS)", "Inventory Managem
 
 
 if page == "Dashboard":
-    st.header("📈 Profit Analytics")
-    
-    # Date Filtering
-    sales_query = "SELECT * FROM inventory WHERE sale_date IS NOT NULL"
+    st.header("📈 Business Analytics")
+
+    # 1. DEFINE THE DATES FIRST
+    c1, c2 = st.columns(2)
+    start_date = c1.date_input("Start Date", datetime.now().replace(day=1))
+    end_date = c2.date_input("End Date", datetime.now()) # <--- This creates 'end_date'
+
+    # 2. NOW USE THE DATES IN YOUR QUERIES
+    # Fetch Gear Sales
+    sales_query = f"SELECT * FROM inventory WHERE sale_date BETWEEN '{start_date}' AND '{end_date}'"
     sales = pd.read_sql(sales_query, conn)
     
-    t = st.radio("Timeframe", ["Daily", "Weekly", "Monthly"], horizontal=True)
-    today = datetime.now().date()
-    start_date = today if t == "Daily" else (today - timedelta(days=7) if t == "Weekly" else today.replace(day=1))
+    # Fetch Service Income (This was line 189)
+    svc_query = f"SELECT * FROM services WHERE sale_date BETWEEN '{start_date}' AND '{end_date}'"
+    services_df = pd.read_sql(svc_query, conn)
     
-    # Query Data
-    sales = pd.read_sql(f"SELECT * FROM inventory WHERE sale_date >= '{start_date}'", conn)
-    exps = pd.read_sql(f"SELECT * FROM expenses WHERE e_date >= '{start_date}'", conn)
-    
-    sales['profit'] = sales['sell_price'] - sales['cost'] - sales['shipping']
-    gross_profit = sales['profit'].sum()
-    total_expenses = exps['amount'].sum()
-    net_profit = gross_profit - total_expenses
-    
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Gross Profit", f"${gross_profit:,.2f}")
-    m2.metric("Expenses", f"-${total_expenses:,.2f}")
-    m3.metric("Net Profit", f"${net_profit:,.2f}")
-    
-    
-    st.subheader("Recent Sales & Customer History")
-    # We select the 'vendor' column because that's where we saved the Customer Name
-    # We rename it to 'Details' for clarity on the screen
-    display_df = sales[['sale_date', 'name', 'brand', 'sku', 'vendor', 'sell_price', 'profit']].copy()
-    display_df.columns = ['Date', 'Item', 'Brand', 'SKU', 'Vendor/Customer', 'Sold Price', 'Profit']
-    
-    st.dataframe(display_df.sort_values(by="Date", ascending=False), use_container_width=True)
-   # Fetch Service Income
-    services_df = pd.read_sql(f"SELECT * FROM services WHERE sale_date BETWEEN '{start_date}' AND '{end_date}'", conn)
+    # 3. CALCULATE REVENUE
     service_revenue = services_df['price'].sum() if not services_df.empty else 0.0
+    # ... rest of your dashboard code ...
 
     # Metrics Layout
     col1, col2, col3, col4 = st.columns(4)
