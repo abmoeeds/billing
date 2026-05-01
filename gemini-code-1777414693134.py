@@ -382,7 +382,7 @@ elif page == "Sales (POS)":
         st.markdown(f"## Total: **£{grand_total:,.2f}**")
 
         if st.button("🏁 Finalize Sale & Generate Invoice", use_container_width=True):
-           today = datetime.now().strftime('%Y-%m-%d')
+          today = datetime.now().strftime('%Y-%m-%d')
                 for item in st.session_state.cart:
                     if item['ids'][0] != 9999: # It's a PRODUCT
                         for item_id in item['ids']:
