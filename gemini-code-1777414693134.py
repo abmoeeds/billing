@@ -4,11 +4,11 @@ import pandas as pd
 from datetime import datetime
 from fpdf import FPDF
 
-# Connect to database
+# 1. DATABASE CONNECTION (Must be before any other code)
 conn = sqlite3.connect('cricket_data.db', check_same_thread=False)
 c = conn.cursor()
 
-# ALL OF THESE MUST BE FLUSH TO THE LEFT MARGIN
+# 2. CREATE TABLES (Ensures the 'services' table exists)
 c.execute('''CREATE TABLE IF NOT EXISTS inventory 
              (id INTEGER PRIMARY KEY, name TEXT, brand TEXT, category TEXT, sku TEXT, 
               cost REAL, vendor TEXT, p_date DATE, sell_price REAL, shipping REAL, 
