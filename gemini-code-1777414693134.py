@@ -381,8 +381,11 @@ elif page == "Sales (POS)":
         grand_total = sum(item['total'] for item in st.session_state.cart)
         st.markdown(f"## Total: **£{grand_total:,.2f}**")
 
-        if st.button("🏁 Finalize Sale & Generate Invoice", use_container_width=True):
-          today = datetime.now().strftime('%Y-%m-%d')
+if st.button("🏁 Finalize Sale & Generate Invoice", use_container_width=True):
+            if cust_name:
+                today = datetime.now().strftime('%Y-%m-%d')
+                
+                # THIS IS THE LINE THAT WAS CAUSING THE ERROR
                 for item in st.session_state.cart:
                     if item['ids'][0] != 9999: # It's a PRODUCT
                         for item_id in item['ids']:
@@ -393,13 +396,19 @@ elif page == "Sales (POS)":
                         c.execute('''INSERT INTO services (service_name, price, customer_name, sale_date, pay_method) 
                                      VALUES (?,?,?,?,?)''', 
                                   (item['name'].replace("SERVICE: ", ""), item['price'], cust_name, today, pay_method))
+                
                 conn.commit()
                 
-                # Generate PDF using the FPDF2 function from our last step
+                # PDF Generation
                 pdf_bytes = create_pdf_invoice(cust_name, pay_method, st.session_state.cart)
-                st.download_button("📥 Download PDF Invoice", data=bytes(pdf_bytes), file_name=f"Invoice_{cust_name}.pdf")
+                st.download_button(
+                    label="📥 Download PDF Invoice",
+                    data=bytes(pdf_bytes),
+                    file_name=f"Invoice_{cust_name}.pdf",
+                    mime="application/pdf"
+                )
                 
                 st.session_state.cart = []
-                st.success("Sale Recorded!")
+                st.success("Sale Completed Successfully!")
             else:
-                st.error("Enter Customer Name")
+                st.error("Please enter a Customer Name")
