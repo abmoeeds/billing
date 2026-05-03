@@ -22,6 +22,16 @@ c.execute('''CREATE TABLE IF NOT EXISTS expenses
              (id INTEGER PRIMARY KEY, category TEXT, amount REAL, notes TEXT, date DATE)''')
 conn.commit()
 
+# Add status columns if they don't exist
+try:
+    c.execute("ALTER TABLE inventory ADD COLUMN status TEXT DEFAULT 'Paid'")
+    c.execute("ALTER TABLE services ADD COLUMN status TEXT DEFAULT 'Paid'")
+    conn.commit()
+except:
+    # Column already exists
+    pass
+
+
 def create_pdf_invoice(customer, pay_method, cart_items):
     pdf = FPDF()
     pdf.add_page()
