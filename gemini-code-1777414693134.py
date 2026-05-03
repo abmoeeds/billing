@@ -151,7 +151,7 @@ if st.sidebar.button("Factory Reset & Load 300 Items"):
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("Go to", ["Dashboard", "Sales (POS)", "Inventory Management", "Expenses"])
 
-elif page == "Dashboard":
+if page == "Dashboard":
     st.header("📈 Business Analytics")
 
     # 1. Get the Date Range first
