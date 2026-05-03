@@ -206,11 +206,13 @@ if page == "Dashboard":
 
     st.divider()
 
-    # --- 2. GEAR SALES HISTORY ---
+# --- 6. GEAR SALES TABLE ---
     st.subheader("🏏 Recent Gear Sales")
-    if not sales.empty:
-        # This shows the actual bats/balls sold
-        gear_view = sales[['sale_date', 'name', 'brand', 'sku', 'vendor', 'sell_price', 'profit']].copy()
+    
+    # Change 'sales' to 'sales_df' here:
+    if not sales_df.empty:
+        # And change it here as well:
+        gear_view = sales_df[['sale_date', 'name', 'brand', 'sku', 'vendor', 'sell_price', 'profit']].copy()
         gear_view.columns = ['Date', 'Item', 'Brand', 'SKU', 'Customer Info', 'Sold (£)', 'Profit (£)']
         st.dataframe(gear_view.sort_values(by="Date", ascending=False), use_container_width=True)
     else:
