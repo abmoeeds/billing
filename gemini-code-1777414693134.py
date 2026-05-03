@@ -151,36 +151,32 @@ if st.sidebar.button("Factory Reset & Load 300 Items"):
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("Go to", ["Dashboard", "Sales (POS)", "Inventory Management", "Expenses"])
 
-
-if page == "Dashboard":
+elif page == "Dashboard":
     st.header("📈 Business Analytics")
 
-    # 1. DEFINE THE DATES FIRST
+    # 1. Get the Date Range first
     c1, c2 = st.columns(2)
     start_date = c1.date_input("Start Date", datetime.now().replace(day=1))
-    end_date = c2.date_input("End Date", datetime.now()) # <--- This creates 'end_date'
+    end_date = c2.date_input("End Date", datetime.now())
 
-    # 2. NOW USE THE DATES IN YOUR QUERIES
-    # Fetch Gear Sales
+    # 2. Fetch the Data from Database
     sales_query = f"SELECT * FROM inventory WHERE sale_date BETWEEN '{start_date}' AND '{end_date}'"
-    sales = pd.read_sql(sales_query, conn)
+    sales_df = pd.read_sql(sales_query, conn)
     
-    # Fetch Service Income (This was line 189)
     svc_query = f"SELECT * FROM services WHERE sale_date BETWEEN '{start_date}' AND '{end_date}'"
     services_df = pd.read_sql(svc_query, conn)
-    
-    # 3. CALCULATE REVENUE
-    service_revenue = services_df['price'].sum() if not services_df.empty else 0.0
-    # ... rest of your dashboard code ...
 
-    # Metrics Layout
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Gear Profit", f"£{gross_profit:,.2f}") # From inventory
-    col2.metric("Labor Income", f"£{service_revenue:,.2f}") # From services
-    col3.metric("Expenses", f"-£{total_expenses:,.2f}")
+    # 3. CALCULATE THE VALUES (This defines 'gross_profit')
+    gross_profit = sales_df['profit'].sum() if not sales_df.empty else 0.0
+    labor_income = services_df['price'].sum() if not services_df.empty else 0.0
+
+    # 4. NOW DISPLAY THE METRICS (Line 178 now has the data it needs)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Gear Profit", f"£{gross_profit:,.2f}")
+    col2.metric("Labor Income", f"£{labor_income:,.2f}")
+    col3.metric("Total Revenue", f"£{(gross_profit + labor_income):,.2f}")
+
     
-    net_total = (gross_profit + service_revenue) - total_expenses
-    col4.metric("Net Profit", f"£{net_total:,.2f}", delta=f"£{service_revenue} from labor")
     
    # --- REPLACE EVERYTHING BELOW YOUR METRIC COLUMNS WITH THIS ---
     st.divider()
